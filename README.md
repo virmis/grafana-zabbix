@@ -1,5 +1,5 @@
 # Grafana-Zabbix
-Zabbix API datasource for Grafana dashboard
+## Zabbix API datasource for Grafana dashboard
 
 ![alt tag](https://cloud.githubusercontent.com/assets/4932851/7454206/34bf9f8c-f27a-11e4-8e96-a73829f188c4.png)
 
