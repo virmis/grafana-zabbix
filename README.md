@@ -1,4 +1,4 @@
-# grafana-zabbix
+# Grafana-Zabbix
 Zabbix API datasource for Grafana dashboard
 
 ![alt tag](https://cloud.githubusercontent.com/assets/4932851/7454206/34bf9f8c-f27a-11e4-8e96-a73829f188c4.png)
@@ -39,5 +39,23 @@ Download latest release and unpack into `<your grafana installation>/plugins/dat
     },
     ```
     
-### Grafana 2.0.x
-Now in development.
+#### Note for Zabbix 2.2 or less
+Zabbix API (api_jsonrpc.php) before zabbix 2.4 don't allow cross-domain requests (CORS). And you can get HTTP error 412 (Precondition Failed).
+To fix it add this code to api_jsonrpc.php immediately after the copyright
+```
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Methods: POST');
+header('Access-Control-Max-Age: 1000');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+	return;
+}
+```
+before 
+```
+require_once dirname(__FILE__).'/include/func.inc.php';
+require_once dirname(__FILE__).'/include/classes/core/CHttpRequest.php';
+```
+[Full fix listing](https://gist.github.com/alexanderzobnin/f2348f318d7a93466a0c).
+For more info see zabbix issues [ZBXNEXT-1377](https://support.zabbix.com/browse/ZBXNEXT-1377) and [ZBX-8459](https://support.zabbix.com/browse/ZBX-8459).
