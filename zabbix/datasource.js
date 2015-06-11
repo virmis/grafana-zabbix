@@ -94,7 +94,7 @@ function (angular, _, kbn) {
             } else {
               items = _.flatten(items);
               return self.performTimeSeriesQuery(items, from, to)
-                .then(_.partial(self.handleHistoryResponse, items));
+                .then(_.partial(self.handleHistoryResponse, items, options.maxDataPoints));
             }
           });
       }, this);
@@ -154,7 +154,7 @@ function (angular, _, kbn) {
      *                               datapoints: [[<value>, <unixtime>], ...]
      *                            }
      */
-    ZabbixAPIDatasource.prototype.handleHistoryResponse = function(items, history) {
+    ZabbixAPIDatasource.prototype.handleHistoryResponse = function(items, maxDataPoints, history) {
       /**
        * Response should be in the format:
        * data: [
@@ -175,14 +175,12 @@ function (angular, _, kbn) {
 
       return $q.when(_.map(grouped_history, function (history, itemid) {
         var item = indexed_items[itemid];
+        var ds = downsampleSeries(_.map(history, function (p) {
+          return [Number(p.value), p.clock * 1000];
+        }), maxDataPoints);
         var series = {
           target: (item.hosts ? item.hosts[0].name+': ' : '') + expandItemName(item),
-          datapoints: _.map(history, function (p) {
-
-            // Value must be a number for properly work
-            var value = Number(p.value);
-            return [value, p.clock * 1000];
-          })
+          datapoints: ds
         };
         return series;
       })).then(function (result) {
@@ -736,5 +734,41 @@ function formatAcknowledges(acknowledges) {
     return formatted_acknowledges;
   } else {
     return '';
+  }
+}
+
+
+/**
+ * Downsample datapoints series
+ *
+ * @param  {array} datapoints       [[<value>, <unixtime>], ...]
+ * @param  {integer} maxDataPoints  Maximum datapoints showed in graph
+ *
+ * @return {array} [[<value>, <unixtime>], ...]
+ */
+function downsampleSeries(datapoints, maxDataPoints) {
+  var downsampleRate = Math.ceil(datapoints.length / maxDataPoints);
+  if (downsampleRate > 1) {
+    // Sort by time
+    var sortedDatapoints = _.sortBy(datapoints, function (point) {
+      return point[1];
+    });
+    var downsampledSeries = new Array();
+    for (var i = sortedDatapoints.length - 1; i >= 0; i -= downsampleRate) {
+      // Calc avg value and time
+      var avgValue = 0;
+      var avgTime = 0;
+      for (var j = 0; j < downsampleRate && i >= j; j++) {
+        avgValue += sortedDatapoints[i - j][0];
+        avgTime += sortedDatapoints[i - j][1];
+      };
+      avgValue /= j;
+      avgTime = Math.floor(avgTime / j);
+
+      downsampledSeries.push([avgValue, avgTime]);
+    };
+    return downsampledSeries;
+  } else {
+    return datapoints;
   }
 }
