@@ -94,7 +94,7 @@ function (angular, _, kbn) {
             } else {
               items = _.flatten(items);
               return self.performTimeSeriesQuery(items, from, to)
-                .then(_.partial(self.handleHistoryResponse, items, options.maxDataPoints));
+                .then(_.partial(self.handleHistoryResponse, items, options.maxDataPoints, options.interval));
             }
           });
       }, this);
@@ -154,7 +154,7 @@ function (angular, _, kbn) {
      *                               datapoints: [[<value>, <unixtime>], ...]
      *                            }
      */
-    ZabbixAPIDatasource.prototype.handleHistoryResponse = function(items, maxDataPoints, history) {
+    ZabbixAPIDatasource.prototype.handleHistoryResponse = function(items, maxDataPoints, interval, history) {
       /**
        * Response should be in the format:
        * data: [
@@ -177,7 +177,7 @@ function (angular, _, kbn) {
         var item = indexed_items[itemid];
         var ds = downsampleSeries(_.map(history, function (p) {
           return [Number(p.value), p.clock * 1000];
-        }), maxDataPoints);
+        }), maxDataPoints, interval);
         var series = {
           target: (item.hosts ? item.hosts[0].name+': ' : '') + expandItemName(item),
           datapoints: ds
@@ -746,13 +746,15 @@ function formatAcknowledges(acknowledges) {
  *
  * @return {array} [[<value>, <unixtime>], ...]
  */
-function downsampleSeries(datapoints, maxDataPoints) {
-  var downsampleRate = Math.ceil(datapoints.length / maxDataPoints);
+function downsampleSeries(datapoints, maxDataPoints, interval) {
+  var downsampleRate = Math.ceil(datapoints.length / maxDataPoints * 2);
+  var ms_interval = convertGrafanaInterval(interval);
   if (downsampleRate > 1) {
     // Sort by time
     var sortedDatapoints = _.sortBy(datapoints, function (point) {
       return point[1];
     });
+    var minTime = sortedDatapoints[0][1];
     var downsampledSeries = new Array();
     for (var i = sortedDatapoints.length - 1; i >= 0; i -= downsampleRate) {
       // Calc avg value and time
@@ -763,12 +765,34 @@ function downsampleSeries(datapoints, maxDataPoints) {
         avgTime += sortedDatapoints[i - j][1];
       };
       avgValue /= j;
-      avgTime = Math.floor(avgTime / j);
+      // !!!Important: round time to correct graph stacking
+      avgTime = Math.floor(avgTime / j / ms_interval) * ms_interval;
+      //avgTime = Math.floor(avgTime / j);
 
-      downsampledSeries.push([avgValue, avgTime]);
+      if (avgTime > minTime) {
+        downsampledSeries.push([avgValue, avgTime]);
+      }
     };
     return downsampledSeries;
   } else {
     return datapoints;
+  }
+}
+
+
+function convertGrafanaInterval(interval) {
+  // Seconds
+  if (interval.match(/s$/)) {
+    return Number(interval.replace(/s$/, '')) * 1000;
+  }
+  // Minutes
+  else if (interval.match(/m$/)) {
+    return Number(interval.replace(/m$/, '')) * 1000 * 60;
+  }
+  // Hours
+  else if (interval.match(/h$/)) {
+    return Number(interval.replace(/h$/, '')) * 1000 * 3600;
+  } else {
+    return null;
   }
 }
