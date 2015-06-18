@@ -747,20 +747,24 @@ function formatAcknowledges(acknowledges) {
  * @return {array} [[<value>, <unixtime>], ...]
  */
 function downsampleSeries(datapoints, maxDataPoints, interval) {
-  var downsampleRate = Math.ceil(datapoints.length / maxDataPoints * 2);
-  var ms_interval = convertGrafanaInterval(interval);
+  // datapoints/maxDataPoints ratio
+  var downsampleCoefficient = 0.5;
+  var downsampleRate = Math.ceil(datapoints.length / maxDataPoints / downsampleCoefficient);
+  var ms_interval = Math.floor(convertGrafanaInterval(interval) / downsampleCoefficient);
   if (downsampleRate > 1) {
+
     // Sort by time
     var sortedDatapoints = _.sortBy(datapoints, function (point) {
       return point[1];
     });
+
     var minTime = sortedDatapoints[0][1];
     var downsampledSeries = new Array();
     for (var i = sortedDatapoints.length - 1; i >= 0; i -= downsampleRate) {
       // Calc avg value and time
       var avgValue = 0;
       var avgTime = 0;
-      for (var j = 0; j < downsampleRate && i >= j; j++) {
+      for (var j = 0; j < downsampleRate && i >= downsampleRate && i >= j; j++) {
         avgValue += sortedDatapoints[i - j][0];
         avgTime += sortedDatapoints[i - j][1];
       };
